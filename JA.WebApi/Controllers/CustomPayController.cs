@@ -7,11 +7,9 @@ using System;
 using System.Collections.Generic;
 using MicrosoftSystemIO = System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using JA.Core.Services;
 using System.IO;
 using Newtonsoft.Json;
-using JA.Business.Services;
 using JA.Entity.DomainModels;
 using JA.Business.Repositories;
 using System.Linq.Expressions;
@@ -25,6 +23,8 @@ namespace JA.WebApi.Controllers
     [Route("api/customPay")]
     public class CustomPayController : Controller
     {
+        #region 缴费接口
+
         /// <summary>
         /// 缴费接口
         /// </summary>
@@ -55,17 +55,71 @@ namespace JA.WebApi.Controllers
             {
                 Id = tf.Id,
                 PayStatus = hasPaid,
+                //从银行收取
+                FeeFromBank = customPayRequest.TX_AMOUNT,
                 ActualPaidRent = customPayRequest.TX_AMOUNT
             };
 
             //更新字段
-            Expression<Func<TenantFee, object>> expTree = x => new { x.PayStatus, x.ActualPaidRent };
+            Expression<Func<TenantFee, object>> expTree = x => new { x.PayStatus, x.ActualPaidRent, x.FeeFromBank };
             TenantFeeRepository.Instance.Update(t, expTree, true);
 
             //TODO:按账期存储缴费记录，并计算欠费或余额数
 
             return Json(new BaseResponse { STATUS = 1, MESSAGE = "缴费成功" });
         }
+
+
+        /// <summary>
+        /// 现金缴费接口
+        /// </summary>
+        /// <param name="customPayRequest"></param>
+        /// <returns></returns>
+        [HttpPost]
+        [Route("PayRentFeeFromCash")]
+        public IActionResult PayRentFeeByCrash([FromBody] CustomPayRequest customPayRequest)
+        {
+            Logger.Info(Core.Enums.LoggerType.Info, JsonConvert.SerializeObject(customPayRequest));
+
+            //TODO:根据专号和账期查询缴费记录 【1107060611301】如果是TenantCode需要根据Code查询Id
+
+            Tenant tenant = TenantRepository.Instance.Find(t => t.TenantCode == customPayRequest.CUST_ID).FirstOrDefault();
+
+            TenantFee tf = TenantFeeRepository.Instance.Find(predicate => predicate.Period == customPayRequest.DL_TERM && predicate.TenantId == tenant.Id).FirstOrDefault();
+
+            if (null == tf)
+            {
+                WebResponseContent response = WebResponseContent.Instance;
+                return Json(response.Error($"【{customPayRequest.CUST_ID}】不存在！"));
+            }
+
+            //TODO:更新缴费状态
+            int hasPaid = 2;
+
+            TenantFee t = new TenantFee
+            {
+                Id = tf.Id,
+                PayStatus = hasPaid,
+                //现金收取
+                Crash = customPayRequest.TX_AMOUNT,
+                ActualPaidRent = customPayRequest.TX_AMOUNT
+            };
+
+            //更新字段
+            Expression<Func<TenantFee, object>> expTree = x => new { x.PayStatus, x.ActualPaidRent, x.Crash };
+            TenantFeeRepository.Instance.Update(t, expTree, true);
+
+            //TODO:按账期存储缴费记录，并计算欠费或余额数
+
+            return Json(new BaseResponse { STATUS = 1, MESSAGE = "缴费成功" });
+        }
+
+
+
+        #endregion
+
+
+        #region 查询账单接口
 
         /// <summary>
         /// 查询接口，客户姓名 账户余额 账期 账单金额 客户地址，账单金额是需要缴费的金额，账单金额与账户余额有一个必然是0
@@ -116,9 +170,14 @@ namespace JA.WebApi.Controllers
                 termBills.Add(bill);
             });
 
-            var data = new CustomBillInfo { Address = tenant.Address, Arrearage = arrearage, Balance = balance, TenantId = tenant.Id, TenantName = tenant.TenantName, TermBill = termBills };
+            var data = new CustomBillInfo { Address = tenant.Address, Arrearage = arrearage, Balance = balance, CustId = tenant.TenantCode, TenantId = tenant.Id, TenantName = tenant.TenantName, TermBill = termBills };
             return Json(new BaseResponse { STATUS = 1, MESSAGE = "成功", DATA = data });
         }
+
+        #endregion
+
+
+        #region 对账接口
 
         /// <summary>
         /// 对账文件上传
@@ -152,5 +211,7 @@ namespace JA.WebApi.Controllers
                 return Content("upload failed!");
             }
         }
+
+        #endregion
     }
 }

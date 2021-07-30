@@ -15,6 +15,10 @@ namespace JA.Entity.ResponseModel
         /// </summary>
         public int TenantId { get; set; }
         /// <summary>
+        /// 租客编码
+        /// </summary>
+        public string CustId { get; set; }
+        /// <summary>
         /// 租客姓名
         /// </summary>
         public string TenantName { get; set; }
