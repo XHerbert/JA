@@ -41,8 +41,8 @@ namespace JA.WebApi.Controllers
             Tenant tenant = TenantRepository.Instance.Find(t => t.TenantCode == customPayRequest.CUST_ID).FirstOrDefault();
 
             TenantFee tf = TenantFeeRepository.Instance.Find(predicate => predicate.Period == customPayRequest.DL_TERM && predicate.TenantId == tenant.Id).FirstOrDefault();
-            
-            if(null == tf)
+
+            if (null == tf)
             {
                 WebResponseContent response = WebResponseContent.Instance;
                 return Json(response.Error($"【{customPayRequest.CUST_ID}】不存在！"));
@@ -50,7 +50,7 @@ namespace JA.WebApi.Controllers
 
             //TODO:更新缴费状态
             int hasPaid = 2;
-            
+
             TenantFee t = new TenantFee
             {
                 Id = tf.Id,
@@ -62,7 +62,7 @@ namespace JA.WebApi.Controllers
             Expression<Func<TenantFee, object>> expTree = x => new { x.PayStatus, x.ActualPaidRent };
             TenantFeeRepository.Instance.Update(t, expTree, true);
 
-            //TODO:
+            //TODO:按账期存储缴费记录，并计算欠费或余额数
 
             return Json(new BaseResponse { STATUS = 1, MESSAGE = "缴费成功" });
         }
@@ -76,9 +76,48 @@ namespace JA.WebApi.Controllers
         [Route("Query")]
         public IActionResult QueryRentFee([FromBody] CustomRequest customRequest)
         {
+            //这里可以直接从生成的缴费清单中获取
+            Tenant tenant = TenantRepository.Instance.Find(t => t.TenantCode == customRequest.CUST_ID).FirstOrDefault();
+            if (null == tenant)
+            {
+                WebResponseContent response = WebResponseContent.Instance;
+                return Json(response.Error($"【{customRequest.CUST_ID}】不存在！"));
+            }
+
             Logger.Info(Core.Enums.LoggerType.Info, JsonConvert.SerializeObject(customRequest));
-            var data = new CustomBillInfo { Address = "add", Arrearage = 125, Balance = 0, TenantId = 1, TenantName = "A", Term = "202107" };
-            return Json(new BaseResponse { STATUS = 1, MESSAGE = "成功" });
+
+            //获取全部账期的数据
+            var tenantFeeList = TenantFeeRepository.Instance.Find(f => f.TenantId == tenant.Id);
+            if (null == tenantFeeList || tenantFeeList.Count == 0)
+            {
+                return Json(new BaseResponse { STATUS = 0, MESSAGE = "暂无数据" });
+            }
+
+            decimal? arrearage = 0, balance = 0;
+
+            List<TermBill> termBills = new List<TermBill>();
+            tenantFeeList.ForEach(item =>
+            {
+                TermBill bill = new TermBill()
+                {
+                    term = item.Period,
+                    //实际支付
+                    ActualPaidRent = item.ActualPaidRent,
+                    //应收（房屋当期租金）
+                    Receivable = item.Receivable,
+                    //欠费（租金减去实际支付）
+                    UnPaidRent = item.Receivable - item.ActualPaidRent
+                };
+                //欠费金额汇总
+                arrearage += bill.UnPaidRent;
+                //余额汇总
+                balance = arrearage > 0 ? 0 : Math.Abs((decimal)arrearage);
+                arrearage = balance > 0 ? 0 : arrearage * (-1);
+                termBills.Add(bill);
+            });
+
+            var data = new CustomBillInfo { Address = tenant.Address, Arrearage = arrearage, Balance = balance, TenantId = tenant.Id, TenantName = tenant.TenantName, TermBill = termBills };
+            return Json(new BaseResponse { STATUS = 1, MESSAGE = "成功", DATA = data });
         }
 
         /// <summary>

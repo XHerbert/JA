@@ -47,9 +47,10 @@ namespace JA.Business.Services
 
             AddOnExecuting = (Tenant tenant, object list) =>
             {
-                string prefixCode = "ZK";
-                string code = $"{prefixCode}{DateTime.Now.ToString("yyyyMMddHHMMssfff")}";
-                tenant.TenantCode = code;
+                //编号由创建人指定
+                //string prefixCode = "ZK";
+                //string code = $"{prefixCode}{DateTime.Now.ToString("yyyyMMddHHMMssfff")}";
+                //tenant.TenantCode = code;
                 return webResponseContent.OK();
             };
             return base.Add(saveDataModel);

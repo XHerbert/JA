@@ -11,6 +11,6 @@ namespace JA.Entity.RequestModel
         /// 客户ID
         /// </summary>
         [JsonProperty("CUST_ID")]
-        public int CUST_ID { get; set; }
+        public string CUST_ID { get; set; }
     }
 }

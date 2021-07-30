@@ -11,5 +11,7 @@ namespace JA.Entity.ResponseModel
         public int STATUS { get; set; }
         public string MESSAGE { get; set; }
 
+        public object DATA { get; set; }
+
     }
 }
